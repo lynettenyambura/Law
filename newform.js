@@ -10,10 +10,6 @@ const searchFilePath = 'searchPage.html';
 const paginationBaseUrl = 'http://kenyalaw.org/caselaw/cases/advanced_search/page/';
 const fetchCookie = makeFetchCookie(fetch);
 
-
-
-
-
 const getFormPage = async () => {
     try {
         const headers = {
@@ -80,14 +76,13 @@ const searchAndParseDate = async () => {
         });
 
         const html = await response.text();
-        await fs.promises.writeFile(searchFilePath, html);
-        //fs.writeFileSync(searchFilePath, html);
+        //await fs.promises.writeFile(searchFilePath, html);
+        fs.writeFileSync(searchFilePath, html);
         console.log('Search results saved to file:', searchFilePath);
 
         const paginate = async () => {
-            const totalPages = 50;
+            
             for (let page = 10; page <= 50; page += 10) {
-                
                 const pageUrl = `${paginationBaseUrl}/${page}/`;
                 try {
                     const pageResponse = await fetchCookie(pageUrl, {
@@ -110,8 +105,8 @@ const searchAndParseDate = async () => {
                     if (pageResponse.status === 200) {
                         const pageHtml = await pageResponse.text();
                         const pageFilePath = `page_${page}.html`;
-                        //fs.writeFileSync(pageFilePath, pageHtml);
-                        await fs.promises.writeFile(pageFilePath, pageHtml);
+                        fs.writeFileSync(pageFilePath, pageHtml);
+                        //await fs.promises.writeFile(pageFilePath, pageHtml);
                         console.log(`Page ${page} content saved to file:`, pageFilePath);
                     } else {
                         console.error('Error fetching page:', pageResponse.statusText);
@@ -122,14 +117,14 @@ const searchAndParseDate = async () => {
             }
         };
         await paginate(); 
-        await readmore();
+        //await readmore();
     } catch (error) {
         console.error('Error in searchAndParseDate:', error);
     }
 };
 
 // function to download the pdf file
-const downloadPDF = async (pdfUrl, caseId) => {
+const downloadPDF = async (pdfUrl, caseId, pdfs) => {
     try {
     const response = await fetchCookie(pdfUrl, {
         method: 'GET',
@@ -157,7 +152,7 @@ const downloadPDF = async (pdfUrl, caseId) => {
     });
     if (response.status === 200) {
         const pdfData = await response.buffer(); 
-        const pdfFileName = `${caseId}.pdf`; 
+        const pdfFileName = `pdfs/${caseId}.pdf`; 
         fs.writeFileSync(pdfFileName, pdfData); 
         console.log(`PDF file saved: ${pdfFileName}`);
     } else {
@@ -167,8 +162,6 @@ const downloadPDF = async (pdfUrl, caseId) => {
     console.error('Error downloading PDF:', error);
 }
 }
-
-
 // parsing results to click readmore for each case/document
 const readmore = async () => {
     try {
@@ -186,19 +179,13 @@ const readmore = async () => {
                 urls.push(href);
             }
         });
-    
-        
     };
     await fs.promises.writeFile('urls.json',JSON.stringify(urls,null,2))
-    
-    
     for(const url of urls) {
         const pageUrl = await url
        const id = pageUrl.split('/')[6];
-
-        const response = await fetchCookie(pageUrl, {
-
-            method: 'GET',
+       const response = await fetchCookie(pageUrl, {
+        method: 'GET',
             headers: {
                 'authority': 'kenyalaw.org',
                 'scheme': 'https',
@@ -239,10 +226,58 @@ const readmore = async () => {
     } catch (error) {
         console.error('Error in readmore:', error);
     }
-
-    
-
-    // return pageHtml
 };
-searchAndParseDate();
-readmore()
+
+// parsing metadata for each case/document
+const metaData = async () => {
+    try {
+        const metaDataArray = [];
+        const caseFilePath = `./links${id}.html`;
+        const caseHtml = await fs.promises.readFile(caseFilePath, 'utf8');
+        const $ = cheerio.load(caseHtml);
+
+        const metadataTable = $('.meta_info');
+        const metadataRows = metadataTable.find('tr');
+
+        metadataRows.each((index, element) => {
+            const key = $(element).find('th').text().trim(); 
+            const value = $(element).find('td').text().trim(); 
+            metaDataArray.push({ [key]: value }); 
+        });
+
+        await fs.promises.writeFile('metadata.json', JSON.stringify(metaDataArray, null, 2));
+        console.log('Metadata saved to file: metadata.json');
+    } catch (error) {
+        console.error('Error in metaData:', error);
+    }
+};
+
+//         $('.meta_info').find('tr').each(function() {
+//             const key = $(this).find('th').text().trim();
+//             const value = $(this).find('td').text().trim();
+//             metaData.push({key, value});
+//         });
+//     }
+//     await fs.promises.writeFile('metadata.json', JSON.stringify(metaData, null, 2));
+
+// };
+        
+
+
+
+
+const main = async () => {
+    try {
+        await searchAndParseDate();
+        await readmore();
+        await metaData();
+        process.exit(0); 
+    } catch (error) {
+        console.error('Error in main:', error);
+        process.exit(1);
+    }
+};
+
+main();
+//searchAndParseDate();
+//readmore()
