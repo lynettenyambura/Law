@@ -38,7 +38,6 @@ const getFormPage = async () => {
     }
 };
 
-
 const searchAndParseDate = async () => {
     try {
         await getFormPage();
@@ -76,7 +75,6 @@ const searchAndParseDate = async () => {
         });
 
         const html = await response.text();
-        //await fs.promises.writeFile(searchFilePath, html);
         fs.writeFileSync(searchFilePath, html);
         console.log('Search results saved to file:', searchFilePath);
 
@@ -116,8 +114,7 @@ const searchAndParseDate = async () => {
                 }
             }
         };
-        await paginate(); 
-        //await readmore();
+       await paginate();
     } catch (error) {
         console.error('Error in searchAndParseDate:', error);
     }
@@ -180,10 +177,13 @@ const readmore = async () => {
             }
         });
     };
+   
     await fs.promises.writeFile('urls.json',JSON.stringify(urls,null,2))
+    //await metaData(urls);
     for(const url of urls) {
         const pageUrl = await url
        const id = pageUrl.split('/')[6];
+       console.log('Fetching case:', id);
        const response = await fetchCookie(pageUrl, {
         method: 'GET',
             headers: {
@@ -218,6 +218,9 @@ const readmore = async () => {
                 // Fetch pdf and save it
                 const pdfUrl = `https://kenyalaw.org/caselaw/cases/export/${id}/pdf`;
                 downloadPDF(pdfUrl, id);
+
+                // parse metadata and save it
+                await metaData([id]);  
             } else {
                 console.error('Error fetching case:', response.statusText);
             }
@@ -229,39 +232,48 @@ const readmore = async () => {
 };
 
 // parsing metadata for each case/document
-const metaData = async () => {
+const metaData = async (ids) => {
     try {
-        const metaDataArray = [];
-        const caseFilePath = `./links${id}.html`;
-        const caseHtml = await fs.promises.readFile(caseFilePath, 'utf8');
-        const $ = cheerio.load(caseHtml);
+        const allMetadata = [];
 
-        const metadataTable = $('.meta_info');
-        const metadataRows = metadataTable.find('tr');
+        for (const id of ids) {
+            const caseFilePath = `./links/${id}.html`;
+            const caseHtml = await fs.promises.readFile(caseFilePath, 'utf8');
+            const $ = cheerio.load(caseHtml);
 
-        metadataRows.each((index, element) => {
-            const key = $(element).find('th').text().trim(); 
-            const value = $(element).find('td').text().trim(); 
-            metaDataArray.push({ [key]: value }); 
-        });
+            const metadataTable = $('.meta_info');
+            const metadataRows = metadataTable.find('tr');
 
-        await fs.promises.writeFile('metadata.json', JSON.stringify(metaDataArray, null, 2));
-        console.log('Metadata saved to file: metadata.json');
+            const metadata = {};
+            metadataRows.each((index, element) => {
+                const key = $(element).find('th').text().trim();
+                const value = $(element).find('td').text().trim();
+                metadata[key] = value;
+            });
+
+            allMetadata.push(metadata);
+        }
+        let existingMetadata = [];
+        try {
+            const existingMetadataJson = await fs.promises.readFile('metaData.json', 'utf8');
+            existingMetadata = JSON.parse(existingMetadataJson);
+        } catch (error) {
+
+        }
+        const updatedMetadata = existingMetadata.concat(allMetadata);
+        await fs.promises.writeFile('metaData.json', JSON.stringify(updatedMetadata, null, 2));
+        console.log('Metadata saved to file: metaData.json');
     } catch (error) {
         console.error('Error in metaData:', error);
     }
 };
 
-//         $('.meta_info').find('tr').each(function() {
-//             const key = $(this).find('th').text().trim();
-//             const value = $(this).find('td').text().trim();
-//             metaData.push({key, value});
-//         });
-//     }
-//     await fs.promises.writeFile('metadata.json', JSON.stringify(metaData, null, 2));
-
-// };
         
+
+
+
+
+
 
 
 
@@ -270,8 +282,7 @@ const main = async () => {
     try {
         await searchAndParseDate();
         await readmore();
-        await metaData();
-        process.exit(0); 
+         process.exit(0); 
     } catch (error) {
         console.error('Error in main:', error);
         process.exit(1);
